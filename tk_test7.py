@@ -763,7 +763,7 @@ class YouTubeChannelManager:
         self.build_ui() # Tạo các widget và cấu hình style
         self.refresh_email_list() # Hiển thị danh sách email ban đầu
         # Ensure the window is maximized after UI is fully built and shown
-        self.root.after(0, self._maximize_main_window)
+        self._schedule_maximize()
 
         # --- Ràng buộc Sự kiện Toàn cục ---
         self.root.bind('<Control-n>', lambda e: self.add_email()) # Ctrl+N để thêm email mới
@@ -823,6 +823,28 @@ class YouTubeChannelManager:
             except Exception:
                 # If all else fails, keep current size
                 pass
+
+    def _schedule_maximize(self):
+        """Lên lịch maximize khi cửa sổ đã map xong (đảm bảo sau đăng nhập)."""
+        window = self.root
+        if not window or not window.winfo_exists():
+            return
+
+        def _on_map(event=None):
+            if window and window.winfo_exists():
+                self._maximize_main_window()
+                try:
+                    window.unbind("<Map>", _on_map_id)
+                except Exception:
+                    pass
+
+        try:
+            _on_map_id = window.bind("<Map>", _on_map)
+        except Exception:
+            _on_map_id = None
+
+        # Fallback: try again shortly in case Map event was missed
+        window.after(150, self._maximize_main_window)
 
     # --- Auto-Lock Methods ---
     def _record_activity(self, event=None):
