@@ -3951,8 +3951,8 @@ class YouTubeChannelManager:
                 # Check if row has enough columns based on the headers found
                 # Use len(headers) instead of len(required_headers) for robustness with older files
                 if len(row) < len(headers):
-                    print(f"Skipping row {row_idx + 2} due to insufficient columns based on headers found.")
-                    continue # Skip rows that don't match expected column count
+                    # Pad missing trailing columns with None to avoid dropping valid rows
+                    row = tuple(row) + (None,) * (len(headers) - len(row))
 
 
                 # Extract data using the index map, providing default empty strings or False if column doesn't exist
@@ -4037,9 +4037,28 @@ class YouTubeChannelManager:
                             "note": channel_note,
                             "in_use": channel_in_use
                         })
-                    # Optional: Update email-level fields if they are provided in this row.
-                    # For simplicity and assuming first row has primary email info, we skip updating email-level fields here.
-                    # If updating on subsequent rows is needed, add logic here to check and update non-empty fields.
+                    # Update email-level fields if non-empty values are provided in subsequent rows.
+                    existing_item = imported_data[idx]
+                    if password:
+                        existing_item["password"] = password
+                    if recovery_email:
+                        existing_item["recovery_email"] = recovery_email
+                    if recovery_password:
+                        existing_item["recovery_password"] = recovery_password
+                    if recovery_phone:
+                        existing_item["recovery_phone"] = recovery_phone
+                    if email_note:
+                        existing_item["email_note"] = email_note
+                    if key:
+                        existing_item["2fa_key"] = key
+                    if verified_by:
+                        existing_item["verified_by"] = verified_by
+                    if login_location:
+                        existing_item["login_location"] = login_location
+                    if qrcode_img:
+                        existing_item["qrcode_image_base64"] = qrcode_img
+                    existing_item["is_verified"] = is_verified or existing_item.get("is_verified", False)
+                    existing_item["verification_failed"] = verification_failed or existing_item.get("verification_failed", False)
 
 
             # Check if any valid data was imported
@@ -4070,7 +4089,7 @@ class YouTubeChannelManager:
              self.status_var.set("Nhập dữ liệu thất bại: Không tìm thấy file.")
         except openpyxl.utils.exceptions.InvalidFileException:
              messagebox.showerror("Lỗi File", "File đã chọn không phải là file Excel (.xlsx) hợp lệ.", parent=self.root)
-             self.status_bar.set("Nhập dữ liệu thất bại: File Excel không hợp lệ.")
+             self.status_var.set("Nhập dữ liệu thất bại: File Excel không hợp lệ.")
         except Exception as e:
             # Catch any other errors during the import process
             messagebox.showerror("Lỗi Nhập dữ liệu", f"Không nhập được dữ liệu từ file Excel.\n{e}", parent=self.root)
