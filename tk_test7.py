@@ -780,13 +780,24 @@ class YouTubeChannelManager:
 
 
     def center_main_window(self):
-        """Căn giữa cửa sổ chính của ứng dụng trên màn hình."""
+        """Căn giữa hoặc mở toàn màn hình cửa sổ chính của ứng dụng."""
         window = self.root
         # Kiểm tra xem cửa sổ có tồn tại không trước khi căn giữa
         if not window or not window.winfo_exists():
              return
 
         window.update_idletasks() # Đảm bảo cửa sổ được đo và kích thước được tính toán
+
+        # Ưu tiên mở toàn màn hình theo yêu cầu
+        try:
+            if os.name == 'nt':
+                window.state('zoomed')  # Windows: maximize cửa sổ
+            else:
+                window.attributes('-fullscreen', True)  # Linux/macOS: fullscreen
+            return
+        except Exception:
+            # Nếu không thể fullscreen, fallback về căn giữa
+            pass
 
         # Lấy kích thước hiện tại của cửa sổ (sau khi geometry("..."))
         width = window.winfo_width()
