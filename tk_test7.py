@@ -37,6 +37,9 @@ FILE = "channels.json"
 ENCRYPTED_FERNET_KEY_FILE = "encrypted_fernet.key"
 SALT_FILE = "salt.key"
 BACKUP_DIR = "backups"
+# Service/Channel options
+SERVICE_OPTIONS = ["ChatGPT", "Gemini", "TikTok", "CapCut", "Facebook", "Edu"]
+CHANNEL_TYPE_OPTIONS = ["YouTube", "TikTok", "Reel"]
 # Thời gian chờ tự động khóa (ví dụ: 15 phút = 900000 ms). Đặt None để tắt
 AUTO_LOCK_TIMEOUT_MS = None # 900000
 
@@ -740,6 +743,10 @@ class YouTubeChannelManager:
         self.qrcode_image_base64_decrypted_var = tk.StringVar(value="") # Lưu chuỗi base64 (đã giải mã)
         self.qrcode_photo_image = None # Tham chiếu đến đối tượng Tkinter PhotoImage
 
+        # Biến lựa chọn dịch vụ và loại kênh
+        self.service_vars = {name: tk.BooleanVar(value=False) for name in SERVICE_OPTIONS}
+        self.channel_type_var = tk.StringVar(value=CHANNEL_TYPE_OPTIONS[0])
+
         # Biến liên quan đến tìm kiếm và trace IDs
         self.global_search_var = tk.StringVar()
         # Ràng buộc hàm tìm kiếm với sự thay đổi trong biến nhập liệu tìm kiếm
@@ -973,10 +980,15 @@ class YouTubeChannelManager:
 
                 # === THÊM GIẢI MÃ CHO TRƯỜNG MẬT KHẨU KHÔI PHỤC ===
                 item["recovery_password"] = self.encryption_manager.decrypt(item.get("recovery_password", ""))
+                item["recovery_2fa_key"] = self.encryption_manager.decrypt(item.get("recovery_2fa_key", ""))
 
                 # Tải các trường không mã hóa, cung cấp giá trị mặc định
                 item["email_note"] = item.get("email_note", "") # Tải trường Ghi chú Email
                 item["recovery_phone"] = item.get("recovery_phone", "") # Tải trường Số điện thoại khôi phục mới
+                used_services = item.get("used_services", [])
+                if isinstance(used_services, str):
+                    used_services = [s.strip() for s in used_services.split(",") if s.strip()]
+                item["used_services"] = used_services
 
                 item["is_verified"] = item.get("is_verified", False)
                 item["verified_by"] = item.get("verified_by", "")
@@ -1024,6 +1036,7 @@ class YouTubeChannelManager:
                 item_copy["recovery_email"] = self.encryption_manager.encrypt(item.get("recovery_email", ""))
                 # === THÊM MÃ HÓA CHO TRƯỜNG MẬT KHẨU KHÔI PHỤC ===
                 item_copy["recovery_password"] = self.encryption_manager.encrypt(item.get("recovery_password", ""))
+                item_copy["recovery_2fa_key"] = self.encryption_manager.encrypt(item.get("recovery_2fa_key", ""))
 
                 item_copy["qrcode_image_base64"] = self.encryption_manager.encrypt(item.get("qrcode_image_base64", ""))
 
@@ -1031,6 +1044,7 @@ class YouTubeChannelManager:
                 item_copy["email"] = item.get("email", "")
                 item_copy["email_note"] = item.get("email_note", "") # Lưu trường Ghi chú Email
                 item_copy["recovery_phone"] = item.get("recovery_phone", "") # Lưu trường Số điện thoại khôi phục mới
+                item_copy["used_services"] = item.get("used_services", [])
 
                 item_copy["is_verified"] = item.get("is_verified", False)
                 item_copy["verified_by"] = item.get("verified_by", "")
@@ -1306,11 +1320,19 @@ class YouTubeChannelManager:
         self.recovery_phone_entry.bind("<FocusIn>", lambda e: self.recovery_phone_entry.config(style='TEntry'))
 
 
+        # Trường nhập Khóa 2FA cho email khôi phục
+        ttk.Label(email_form_top_frame, text="2FA khôi phục:", font=self.label_font).grid(row=5, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        self.recovery_2fa_entry = ttk.Entry(email_form_top_frame, width=40, font=self.entry_font)
+        self.recovery_2fa_entry.grid(row=5, column=1, sticky=tk.W, pady=5)
+        ToolTip(self.recovery_2fa_entry, "Khóa 2FA của email khôi phục (Base32)")
+        self.recovery_2fa_entry.bind("<Key>", lambda e: self.recovery_2fa_entry.config(style='TEntry'))
+        self.recovery_2fa_entry.bind("<FocusIn>", lambda e: self.recovery_2fa_entry.config(style='TEntry'))
+
         # Trường nhập Khóa 2FA
-        ttk.Label(email_form_top_frame, text="Khóa 2FA:", font=self.label_font).grid(row=5, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        ttk.Label(email_form_top_frame, text="Khóa 2FA:", font=self.label_font).grid(row=6, column=0, sticky=tk.W, pady=5, padx=(0, 10))
         # --- Thay đổi width và sticky cho 2FA Key Entry ---
         self.key_entry = ttk.Entry(email_form_top_frame, width=40, font=self.entry_font)
-        self.key_entry.grid(row=5, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
+        self.key_entry.grid(row=6, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
         ToolTip(self.key_entry, "Khóa bí mật 2FA của Google Authenticator / TOTP (Base32)")
         # Ràng buộc để reset style lỗi khi người dùng bắt đầu gõ hoặc focus
         self.key_entry.bind("<Key>", lambda e: self.key_entry.config(style='TEntry'))
@@ -1318,10 +1340,10 @@ class YouTubeChannelManager:
 
 
         # Trạng thái xác minh
-        ttk.Label(email_form_top_frame, text="Trạng thái xác minh:", font=self.label_font).grid(row=6, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        ttk.Label(email_form_top_frame, text="Trạng thái xác minh:", font=self.label_font).grid(row=7, column=0, sticky=tk.W, pady=5, padx=(0, 10))
         verified_status_frame = ttk.Frame(email_form_top_frame)
         # --- Thay đổi sticky cho Verified Status Frame ---
-        verified_status_frame.grid(row=6, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.W (đã đúng) -> giữ nguyên
+        verified_status_frame.grid(row=7, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.W (đã đúng) -> giữ nguyên
         self.is_verified_checkbox = ttk.Checkbutton(
             verified_status_frame, text="Đã xác minh", variable=self.is_verified_var
         )
@@ -1336,24 +1358,24 @@ class YouTubeChannelManager:
 
 
         # Trường nhập Người xác minh
-        ttk.Label(email_form_top_frame, text="Người xác minh:", font=self.label_font).grid(row=7, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        ttk.Label(email_form_top_frame, text="Người xác minh:", font=self.label_font).grid(row=8, column=0, sticky=tk.W, pady=5, padx=(0, 10))
         # --- Thay đổi width và sticky cho Verified By Entry ---
         self.verified_by_entry = ttk.Entry(email_form_top_frame, width=40, font=self.entry_font, textvariable=self.verified_by_var)
-        self.verified_by_entry.grid(row=7, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
+        self.verified_by_entry.grid(row=8, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
         ToolTip(self.verified_by_entry, "Tên hoặc mã định danh của người đã xử lý việc xác minh")
 
         # Trường nhập Vị trí đăng nhập
-        ttk.Label(email_form_top_frame, text="Đăng nhập ở:", font=self.label_font).grid(row=8, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        ttk.Label(email_form_top_frame, text="Đăng nhập ở:", font=self.label_font).grid(row=9, column=0, sticky=tk.W, pady=5, padx=(0, 10))
         # --- Thay đổi width và sticky cho Login Location Entry ---
         self.login_location_entry = ttk.Entry(email_form_top_frame, width=40, font=self.entry_font, textvariable=self.login_location_var)
-        self.login_location_entry.grid(row=8, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
+        self.login_location_entry.grid(row=9, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
         ToolTip(self.login_location_entry, "Vị trí đăng nhập thông thường (ví dụ: Quốc gia, Thành phố, tên VPN)")
 
         # Nút Lưu Email
         self.save_email_button = ttk.Button(email_form_top_frame, text="💾 Lưu Email", command=self.save_email, style='Accent.TButton')
         # Điều chỉnh grid row
         # --- Thay đổi sticky cho Save Email Button ---
-        self.save_email_button.grid(row=9, column=1, sticky=tk.W, pady=10) # <-- Thay đổi sticky từ tk.W (đã đúng) -> giữ nguyên
+        self.save_email_button.grid(row=10, column=1, sticky=tk.W, pady=10) # <-- Thay đổi sticky từ tk.W (đã đúng) -> giữ nguyên
         ToolTip(self.save_email_button, "Lưu thông tin email (Ctrl+S)")
 
         # Frame cho phần dưới của email_pane (OTP, QR, Note)
@@ -1425,6 +1447,19 @@ class YouTubeChannelManager:
         email_note_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.email_note_text.config(yscrollcommand=email_note_scrollbar.set)
 
+        # Frame dịch vụ đã sử dụng
+        services_frame = ttk.LabelFrame(email_form_bottom_frame, text="Dịch vụ đã dùng", padding="10")
+        services_frame.grid(row=3, column=0, sticky=tk.EW, pady=(0, 5))
+        services_frame.columnconfigure(0, weight=1)
+
+        services_grid = ttk.Frame(services_frame)
+        services_grid.grid(row=0, column=0, sticky=tk.EW)
+        for idx, service in enumerate(SERVICE_OPTIONS):
+            row = idx // 3
+            col = idx % 3
+            cb = ttk.Checkbutton(services_grid, text=service, variable=self.service_vars[service])
+            cb.grid(row=row, column=col, sticky=tk.W, padx=5, pady=2)
+            ToolTip(cb, f"Đánh dấu nếu đã sử dụng dịch vụ {service}")
 
         # --- Tab 2: Quản lý Kênh ---
         channel_frame = ttk.Frame(self.notebook, padding="10")
@@ -1452,25 +1487,38 @@ class YouTubeChannelManager:
         self.name_entry.grid(row=1, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
         ToolTip(self.name_entry, "Tên của kênh YouTube")
 
+        # Loại Kênh
+        ttk.Label(channel_form_frame, text="Loại kênh:", font=self.label_font).grid(row=2, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        self.channel_type_combo = ttk.Combobox(
+            channel_form_frame,
+            textvariable=self.channel_type_var,
+            values=CHANNEL_TYPE_OPTIONS,
+            state="readonly",
+            width=38,
+            font=self.entry_font,
+        )
+        self.channel_type_combo.grid(row=2, column=1, sticky=tk.W, pady=5)
+        ToolTip(self.channel_type_combo, "Chọn loại kênh (YouTube, TikTok, Reel)")
+
         # Trường nhập Ghi chú Kênh
-        ttk.Label(channel_form_frame, text="Ghi chú:", font=self.label_font).grid(row=2, column=0, sticky=tk.W, pady=5, padx=(0, 10))
+        ttk.Label(channel_form_frame, text="Ghi chú:", font=self.label_font).grid(row=3, column=0, sticky=tk.W, pady=5, padx=(0, 10))
         # --- Thay đổi width và sticky cho Channel Note Entry ---
         self.note_entry = ttk.Entry(channel_form_frame, width=40, font=self.entry_font)
-        self.note_entry.grid(row=2, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
+        self.note_entry.grid(row=3, column=1, sticky=tk.W, pady=5) # <-- Thay đổi sticky từ tk.EW sang tk.W
         ToolTip(self.note_entry, "Bất kỳ ghi chú nào liên quan đến kênh này")
 
         # Checkbox Kênh đang sử dụng
         self.use_var = tk.BooleanVar()
         self.use_checkbox = ttk.Checkbutton(channel_form_frame, text="Đang sử dụng", variable=self.use_var)
         # --- Thay đổi sticky cho Channel In Use Checkbox ---
-        self.use_checkbox.grid(row=3, column=1, sticky=tk.W, pady=5) # <-- sticky đã là tk.W, giữ nguyên
+        self.use_checkbox.grid(row=4, column=1, sticky=tk.W, pady=5) # <-- sticky đã là tk.W, giữ nguyên
         ToolTip(self.use_checkbox, "Chọn nếu kênh này hiện đang hoạt động hoặc được sử dụng")
 
 
         # Frame Nút Biểu mẫu Kênh (Lấy tên, Lưu)
         button_frame = ttk.Frame(channel_form_frame)
         # --- Thay đổi sticky cho Channel Button Frame ---
-        button_frame.grid(row=4, column=1, sticky=tk.W, pady=5) # <-- sticky đã là tk.W, giữ nguyên
+        button_frame.grid(row=5, column=1, sticky=tk.W, pady=5) # <-- sticky đã là tk.W, giữ nguyên
         # Nội dung bên trong button_frame (các nút) sẽ được căn trái (sticky=tk.LEFT)
         self.fetch_name_button = ttk.Button(button_frame, text="🌐 Lấy tên", command=self.fetch_channel_name)
         self.fetch_name_button.pack(side=tk.LEFT, padx=(0, 5))
@@ -1506,16 +1554,18 @@ class YouTubeChannelManager:
         channel_list_frame.grid_rowconfigure(0, weight=1)
         channel_list_frame.grid_columnconfigure(0, weight=1)
 
-        self.channel_tree = ttk.Treeview(channel_list_frame, columns=('status', 'name', 'url', 'note'), show='headings', height=12)
+        self.channel_tree = ttk.Treeview(channel_list_frame, columns=('status', 'type', 'name', 'url', 'note'), show='headings', height=12)
         # Định nghĩa tiêu đề và liên kết chúng với các phương thức sắp xếp
         self.channel_tree.heading('status', text='Trạng thái', anchor=tk.W, command=lambda: self._sort_channel_tree('status'))
+        self.channel_tree.heading('type', text='Loại', anchor=tk.W, command=lambda: self._sort_channel_tree('type'))
         self.channel_tree.heading('name', text='Tên Kênh', anchor=tk.W, command=lambda: self._sort_channel_tree('name'))
         self.channel_tree.heading('url', text='URL', anchor=tk.W, command=lambda: self._sort_channel_tree('url'))
         self.channel_tree.heading('note', text='Ghi chú', anchor=tk.W, command=lambda: self._sort_channel_tree('note'))
         # Định nghĩa thuộc tính cột
         self.channel_tree.column('status', width=70, stretch=tk.NO, anchor=tk.CENTER)
-        self.channel_tree.column('name', width=200, stretch=tk.YES)
-        self.channel_tree.column('url', width=250, stretch=tk.YES)
+        self.channel_tree.column('type', width=90, stretch=tk.NO, anchor=tk.W)
+        self.channel_tree.column('name', width=180, stretch=tk.YES)
+        self.channel_tree.column('url', width=240, stretch=tk.YES)
         self.channel_tree.column('note', width=200, stretch=tk.YES)
         # Đặt Treeview và ràng buộc sự kiện chọn
         self.channel_tree.grid(row=0, column=0, sticky="nsew")
@@ -1677,6 +1727,8 @@ class YouTubeChannelManager:
             elif col == 'name':
                  # Sắp xếp tên không phân biệt chữ hoa chữ thường
                  return channel.get('channel_name', '').lower()
+            elif col == 'type':
+                 return channel.get('channel_type', '').lower()
             elif col == 'url':
                  # Sắp xếp URL không phân biệt chữ hoa chữ thường
                  return channel.get('channel_url', '').lower()
@@ -1689,9 +1741,10 @@ class YouTubeChannelManager:
         channels.sort(key=sort_key, reverse=self._channel_sort_order)
 
         # Cập nhật tiêu đề treeview kênh để hiển thị mũi tên sắp xếp
-        for c in ('status', 'name', 'url', 'note'):
+        for c in ('status', 'type', 'name', 'url', 'note'):
             heading_text = c.replace('_', ' ').title()
             if c == 'status': heading_text = 'Trạng thái' # Trường hợp đặc biệt cho tiêu đề cột trạng thái
+            if c == 'type': heading_text = 'Loại'
             current_text = self.channel_tree.heading(c, 'text')
             clean_text = current_text.replace(' ▲', '').replace(' ▼', '') # Xóa các mũi tên hiện có
 
@@ -1942,6 +1995,8 @@ class YouTubeChannelManager:
         recovery_email = "" # Thêm biến email khôi phục
         recovery_phone = "" # Thêm biến sđt khôi phục
         recovery_password = "" # Thêm biến mật khẩu khôi phục
+        recovery_2fa_key = ""
+        used_services = []
         is_verified = False
         verified_by = ""
         login_location = ""
@@ -1955,6 +2010,8 @@ class YouTubeChannelManager:
              recovery_email = email_data.get("recovery_email", "") # Lấy email khôi phục
              recovery_phone = email_data.get("recovery_phone", "") # Lấy sđt khôi phục
              recovery_password = email_data.get("recovery_password", "") # Lấy mật khẩu khôi phục
+             recovery_2fa_key = email_data.get("recovery_2fa_key", "")
+             used_services = email_data.get("used_services", [])
 
              is_verified = email_data.get("is_verified", False)
              verified_by = email_data.get("verified_by", "")
@@ -1970,6 +2027,7 @@ class YouTubeChannelManager:
         if recovery_email: recovery_info_str += f"Email khôi phục: {recovery_email}\n"
         if recovery_password: recovery_info_str += f"Mật khẩu Email khôi phục: {recovery_password}\n" # Bao gồm mật khẩu khôi phục
         if recovery_phone: recovery_info_str += f"SĐT khôi phục: {recovery_phone}\n" # Bao gồm sđt khôi phục
+        if recovery_2fa_key: recovery_info_str += f"2FA Email khôi phục: {recovery_2fa_key}\n"
 
         if recovery_info_str:
              self.channel_info_text.insert(tk.END, f"Thông tin khôi phục:\n", "title")
@@ -1982,6 +2040,11 @@ class YouTubeChannelManager:
              self.channel_info_text.insert(tk.END, f"Ghi chú Email:\n", "title")
              self.channel_info_text.insert(tk.END, f"{email_note}\n", "note")
              self.channel_info_text.insert(tk.END, "-" * 40 + "\n", "note") # Dòng phân cách
+
+        if used_services:
+             services_str = ", ".join(used_services)
+             self.channel_info_text.insert(tk.END, f"Dịch vụ đã dùng: {services_str}\n", "recovery_info")
+             self.channel_info_text.insert(tk.END, "-" * 40 + "\n", "recovery_info")
 
         # Chèn Trạng thái xác minh với tag và ưu tiên phù hợp
         self.channel_info_text.insert(tk.END, f"Trạng thái xác minh: ", "title")
@@ -2014,10 +2077,13 @@ class YouTubeChannelManager:
                 url = ch.get("channel_url", "")
                 in_use = ch.get("in_use", False)
                 note = ch.get("note", "")
+                channel_type = ch.get("channel_type", CHANNEL_TYPE_OPTIONS[0])
 
                 self.channel_info_text.insert(tk.END, f"{i+1}. {name}\n", "title") # Số kênh và tên
 
                 if url: self.channel_info_text.insert(tk.END, f"   URL: {url}\n", "url") # URL với kiểu hyperlink
+                if channel_type:
+                    self.channel_info_text.insert(tk.END, f"   Loại kênh: {channel_type}\n", "title")
 
                 # Trạng thái (Đang sử dụng) với tag màu
                 self.channel_info_text.insert(tk.END, f"   Trạng thái: ", "title")
@@ -2141,8 +2207,9 @@ class YouTubeChannelManager:
                     ch_name = channel.get("channel_name", "").lower()
                     ch_url = channel.get("channel_url", "").lower()
                     ch_note = channel.get("note", "").lower()
+                    ch_type = channel.get("channel_type", "").lower()
 
-                    if scope == "all" and (search_term in ch_name or search_term in ch_url or search_term in ch_note):
+                    if scope == "all" and (search_term in ch_name or search_term in ch_url or search_term in ch_note or search_term in ch_type):
                          channel_term_matches = True
                     elif scope == "names" and search_term in ch_name:
                          channel_term_matches = True
@@ -2337,6 +2404,7 @@ class YouTubeChannelManager:
         # === RESET STYLE CHO TRƯỜNG MỚI ===
         self.recovery_password_entry.config(style='TEntry')
         self.recovery_phone_entry.config(style='TEntry')
+        self.recovery_2fa_entry.config(style='TEntry')
 
 
         # Xóa nội dung tất cả các trường nhập liệu
@@ -2346,6 +2414,7 @@ class YouTubeChannelManager:
         # === XÓA TRƯỜNG MỚI ===
         self.recovery_password_entry.delete(0, tk.END)
         self.recovery_phone_entry.delete(0, tk.END)
+        self.recovery_2fa_entry.delete(0, tk.END)
 
         self.key_entry.delete(0, tk.END)
         # Xóa nội dung trường Ghi chú Email (tk.Text)
@@ -2357,6 +2426,8 @@ class YouTubeChannelManager:
         self.verified_by_var.set("")
         self.login_location_var.set("")
         self.verification_failed_var.set(False)
+        for service_var in self.service_vars.values():
+            service_var.set(False)
 
         # Xóa xem trước và biến mã QR
         self.clear_qrcode_image_variable()
@@ -2368,6 +2439,7 @@ class YouTubeChannelManager:
         # === CHÈN DỮ LIỆU CHO TRƯỜNG MỚI ===
         self.recovery_password_entry.insert(0, email_data.get("recovery_password", ""))
         self.recovery_phone_entry.insert(0, email_data.get("recovery_phone", ""))
+        self.recovery_2fa_entry.insert(0, email_data.get("recovery_2fa_key", ""))
 
         self.key_entry.insert(0, email_data.get("2fa_key", ""))
         self.email_note_text.insert(tk.END, email_data.get("email_note", "")) # Chèn ghi chú email
@@ -2375,6 +2447,9 @@ class YouTubeChannelManager:
         self.verified_by_var.set(email_data.get("verified_by", ""))
         self.login_location_var.set(email_data.get("login_location", ""))
         self.verification_failed_var.set(email_data.get("verification_failed", False)) # Đặt trạng thái checkbox mới
+        used_services = email_data.get("used_services", [])
+        for service_name, service_var in self.service_vars.items():
+            service_var.set(service_name in used_services)
 
         self.email_note_text.config(state=tk.NORMAL) # Luôn cho phép chỉnh sửa ghi chú
 
@@ -2404,6 +2479,7 @@ class YouTubeChannelManager:
          # === RESET STYLE CHO TRƯỜNG MỚI ===
          self.recovery_password_entry.config(style='TEntry')
          self.recovery_phone_entry.config(style='TEntry')
+         self.recovery_2fa_entry.config(style='TEntry')
 
 
          self.email_entry.delete(0, tk.END)
@@ -2412,6 +2488,7 @@ class YouTubeChannelManager:
          # === XÓA TRƯỜNG MỚI ===
          self.recovery_password_entry.delete(0, tk.END)
          self.recovery_phone_entry.delete(0, tk.END)
+         self.recovery_2fa_entry.delete(0, tk.END)
          self.key_entry.delete(0, tk.END)
 
          # Xóa nội dung trường Ghi chú Email (tk.Text)
@@ -2424,6 +2501,8 @@ class YouTubeChannelManager:
          self.verified_by_var.set("")
          self.login_location_var.set("")
          self.verification_failed_var.set(False) # Xóa trạng thái checkbox mới
+         for service_var in self.service_vars.values():
+             service_var.set(False)
 
          # Đặt lại chức năng bật/tắt hiển thị mật khẩu
          self.show_password.set(False)
@@ -2526,6 +2605,7 @@ class YouTubeChannelManager:
         self.name_entry.delete(0, tk.END)
         self.note_entry.delete(0, tk.END)
         self.use_var.set(False) # Bỏ chọn checkbox 'Đang sử dụng'
+        self.channel_type_var.set(CHANNEL_TYPE_OPTIONS[0])
         self.selected_channel_index = None # Đặt lại chỉ mục kênh đã chọn
         self._data_changed = False # Đặt lại cờ dữ liệu đã thay đổi khi xóa
 
@@ -2559,7 +2639,12 @@ class YouTubeChannelManager:
         # Nếu không áp dụng sắp xếp nào, điền nội dung treeview theo thứ tự hiện tại
         for ch in channels:
             status = "✅" if ch.get("in_use", False) else "❌"
-            self.channel_tree.insert("", tk.END, values=(status, ch.get("channel_name", ""), ch.get("channel_url", ""), ch.get("note", "")))
+            channel_type = ch.get("channel_type", CHANNEL_TYPE_OPTIONS[0])
+            self.channel_tree.insert(
+                "",
+                tk.END,
+                values=(status, channel_type, ch.get("channel_name", ""), ch.get("channel_url", ""), ch.get("note", "")),
+            )
 
         # Cập nhật thanh trạng thái và xem nhanh
         email_addr = self.data[self.selected_email_index].get('email', 'đã chọn')
@@ -2661,6 +2746,7 @@ class YouTubeChannelManager:
             self.name_entry.insert(0, channel_data.get("channel_name", ""))
             self.note_entry.insert(0, channel_data.get("note", ""))
             self.use_var.set(channel_data.get("in_use", False))
+            self.channel_type_var.set(channel_data.get("channel_type", CHANNEL_TYPE_OPTIONS[0]))
 
             # Switch to the Channel Management tab
             self.notebook.select(1)
@@ -2828,6 +2914,7 @@ class YouTubeChannelManager:
         # === LẤY DỮ LIỆU TỪ TRƯỜNG MỚI ===
         recovery_password = self.recovery_password_entry.get().strip()
         recovery_phone = self.recovery_phone_entry.get().strip()
+        recovery_2fa_key = self.recovery_2fa_entry.get().strip().replace(" ", "").upper()
 
         key = self.key_entry.get().strip().replace(" ", "").upper() # Làm sạch khóa 2FA
         email_note = self.email_note_text.get(1.0, tk.END).strip() # Lấy nội dung ghi chú email
@@ -2836,6 +2923,7 @@ class YouTubeChannelManager:
         login_location = self.login_location_var.get().strip()
         verification_failed = self.verification_failed_var.get() # Lấy giá trị checkbox mới
         decrypted_b64_img = self.qrcode_image_base64_decrypted_var.get() # Lấy dữ liệu ảnh base64
+        used_services = [name for name, var in self.service_vars.items() if var.get()]
 
         # Reset styles lỗi trước khi xác thực lại
         self.email_entry.config(style='TEntry')
@@ -2845,6 +2933,7 @@ class YouTubeChannelManager:
         # === RESET STYLE CHO TRƯỜNG MỚI ===
         self.recovery_password_entry.config(style='TEntry')
         self.recovery_phone_entry.config(style='TEntry')
+        self.recovery_2fa_entry.config(style='TEntry')
 
 
         # Thực hiện xác thực cơ bản
@@ -2867,6 +2956,11 @@ class YouTubeChannelManager:
             messagebox.showwarning("Xác thực", "Định dạng Khóa 2FA không hợp lệ.", parent=self.root)
             self.key_entry.config(style='Error.TEntry')
             self.key_entry.focus_set()
+            return
+        if recovery_2fa_key and not self.validate_2fa_key(recovery_2fa_key):
+            messagebox.showwarning("Xác thực", "Định dạng Khóa 2FA khôi phục không hợp lệ.", parent=self.root)
+            self.recovery_2fa_entry.config(style='Error.TEntry')
+            self.recovery_2fa_entry.focus_set()
             return
         # === THÊM XÁC THỰC ĐƠN GIẢN CHO SỐ ĐIỆN THOẠI (TÙY CHỌN) ===
         # Có thể thêm regex phức tạp hơn cho số điện thoại nếu cần
@@ -2895,9 +2989,11 @@ class YouTubeChannelManager:
             # === BAO GỒM TRƯỜNG MỚI ===
             "recovery_password": recovery_password,
             "recovery_phone": recovery_phone,
+            "recovery_2fa_key": recovery_2fa_key,
 
             "2fa_key": key,
             "email_note": email_note, # Bao gồm trường ghi chú email
+            "used_services": used_services,
             "is_verified": is_verified,
             "verified_by": verified_by,
             "login_location": login_location,
@@ -3124,6 +3220,7 @@ class YouTubeChannelManager:
         name = self.name_entry.get().strip()
         note = self.note_entry.get().strip()
         use = self.use_var.get()
+        channel_type = self.channel_type_var.get().strip() or CHANNEL_TYPE_OPTIONS[0]
 
         # Reset style lỗi trước khi xác thực lại
         self.url_entry.config(style='TEntry')
@@ -3177,7 +3274,13 @@ class YouTubeChannelManager:
 
 
         # Prepare channel data dictionary
-        channel_data = {"channel_url": url, "channel_name": name, "note": note, "in_use": use}
+        channel_data = {
+            "channel_url": url,
+            "channel_name": name,
+            "channel_type": channel_type,
+            "note": note,
+            "in_use": use,
+        }
 
         # Get the channels list for the selected email, ensure it exists
         channels_list = self.data[self.selected_email_index].setdefault("channels", [])
@@ -3816,11 +3919,11 @@ class YouTubeChannelManager:
 
             # Define the header row
             headers = [
-                "Email", "Password", "Recovery Email", "Recovery Password", "Recovery Phone", "Email Note",
-                "2FA Key", # Thêm 2FA Key vào header
+                "Email", "Password", "Recovery Email", "Recovery Password", "Recovery Phone", "Recovery 2FA Key", "Email Note",
+                "2FA Key", "Used Services", # Thêm 2FA Key vào header
                 "Is Verified", "Verification Failed", "Verified By", "Login Location",
                 "QR Code Image (Base64)", # Note: This is the raw base64 string
-                "Channel URL", "Channel Name", "Channel Note", "Channel In Use"
+                "Channel URL", "Channel Name", "Channel Type", "Channel Note", "Channel In Use"
             ]
             ws.append(headers) # Write headers to the first row
 
@@ -3834,6 +3937,8 @@ class YouTubeChannelManager:
                 recovery_password = item.get("recovery_password", "")
                 recovery_phone = item.get("recovery_phone", "")
                 email_note = item.get("email_note", "") # Lấy ghi chú email
+                recovery_2fa_key = item.get("recovery_2fa_key", "")
+                used_services = ", ".join(item.get("used_services", []))
 
                 key = item.get("2fa_key", "") # Lấy 2FA Key
 
@@ -3855,15 +3960,17 @@ class YouTubeChannelManager:
                         # === XUẤT TRƯỜNG MỚI ===
                         recovery_password,
                         recovery_phone,
+                        recovery_2fa_key,
                         email_note,
 
                         key, # Xuất 2FA Key
+                        used_services,
                         is_verified,
                         verification_failed,
                         verified_by,
                         login_location,
                         qrcode_img,
-                        "", "", "", "" # Empty channel fields
+                        "", "", "", "", "" # Empty channel fields
                     ])
                 else:
                     # If an email has channels, export one row for each channel, duplicating email data
@@ -3875,9 +3982,11 @@ class YouTubeChannelManager:
                              # === XUẤT TRƯỜNG MỚI ===
                             recovery_password,
                             recovery_phone,
+                            recovery_2fa_key,
                             email_note,
 
                             key, # Xuất 2FA Key
+                            used_services,
                             is_verified,
                             verification_failed,
                             verified_by,
@@ -3885,6 +3994,7 @@ class YouTubeChannelManager:
                             qrcode_img,
                             ch.get("channel_url", ""),
                             ch.get("channel_name", ""),
+                            ch.get("channel_type", CHANNEL_TYPE_OPTIONS[0]),
                             ch.get("note", ""),
                             ch.get("in_use", False),
                         ])
@@ -3961,10 +4071,10 @@ class YouTubeChannelManager:
 
             # Define required columns based on our data structure (including the new one)
             required_headers = [
-                "Email", "Password", "Recovery Email", "Recovery Password", "Recovery Phone", "Email Note",
-                "2FA Key", # Thêm 2FA Key vào required_headers
+                "Email", "Password", "Recovery Email", "Recovery Password", "Recovery Phone", "Recovery 2FA Key", "Email Note",
+                "2FA Key", "Used Services", # Thêm 2FA Key vào required_headers
                 "Is Verified", "Verification Failed", "Verified By", "Login Location",
-                "QR Code Image (Base64)", "Channel URL", "Channel Name", "Channel Note", "Channel In Use"
+                "QR Code Image (Base64)", "Channel URL", "Channel Name", "Channel Type", "Channel Note", "Channel In Use"
             ]
 
             # Check for missing required headers
@@ -4007,10 +4117,13 @@ class YouTubeChannelManager:
                 # === LẤY DỮ LIỆU TRƯỜNG MỚI KHI NHẬP ===
                 recovery_password = (row[idx_map.get("Recovery Password", -1)] or "") if idx_map.get("Recovery Password", -1) != -1 else ""
                 recovery_phone = (row[idx_map.get("Recovery Phone", -1)] or "") if idx_map.get("Recovery Phone", -1) != -1 else ""
+                recovery_2fa_key = (row[idx_map.get("Recovery 2FA Key", -1)] or "") if idx_map.get("Recovery 2FA Key", -1) != -1 else ""
                 email_note = (row[idx_map.get("Email Note", -1)] or "") if idx_map.get("Email Note", -1) != -1 else ""
 
 
                 key = (row[idx_map.get("2FA Key", -1)] or "") if idx_map.get("2FA Key", -1) != -1 else "" # Lấy 2FA Key
+                used_services_raw = (row[idx_map.get("Used Services", -1)] or "") if idx_map.get("Used Services", -1) != -1 else ""
+                used_services = [s.strip() for s in str(used_services_raw).split(",") if s.strip()]
 
                 # Convert boolean strings/numbers from Excel to Python booleans
                 # Handle potential None/empty values from Excel as False
@@ -4024,6 +4137,7 @@ class YouTubeChannelManager:
 
                 channel_url = (row[idx_map.get("Channel URL", -1)] or "").strip() if idx_map.get("Channel URL", -1) != -1 else ""
                 channel_name = (row[idx_map.get("Channel Name", -1)] or "") if idx_map.get("Channel Name", -1) != -1 else ""
+                channel_type = (row[idx_map.get("Channel Type", -1)] or "") if idx_map.get("Channel Type", -1) != -1 else ""
                 channel_note = (row[idx_map.get("Channel Note", -1)] or "") if idx_map.get("Channel Note", -1) != -1 else ""
                 channel_in_use = str(row[idx_map.get("Channel In Use", -1)]).lower() in ('true', '1') if idx_map.get("Channel In Use", -1) != -1 and row[idx_map["Channel In Use"]] is not None else False
 
@@ -4044,8 +4158,10 @@ class YouTubeChannelManager:
                         "recovery_email": recovery_email,
                          # === BAO GỒM TRƯỜNG MỚI ===
                         "recovery_password": recovery_password, # Store raw password, _save_data will encrypt
+                        "recovery_2fa_key": recovery_2fa_key,
                         "recovery_phone": recovery_phone,
                         "email_note": email_note, # Bao gồm ghi chú email
+                        "used_services": used_services,
 
                         "2fa_key": key, # Bao gồm 2FA Key
                         "is_verified": is_verified,
@@ -4060,6 +4176,7 @@ class YouTubeChannelManager:
                         email_item["channels"].append({
                             "channel_url": channel_url,
                             "channel_name": channel_name,
+                            "channel_type": channel_type or CHANNEL_TYPE_OPTIONS[0],
                             "note": channel_note,
                             "in_use": channel_in_use
                         })
@@ -4077,6 +4194,7 @@ class YouTubeChannelManager:
                         imported_data[idx]["channels"].append({
                             "channel_url": channel_url,
                             "channel_name": channel_name,
+                            "channel_type": channel_type or CHANNEL_TYPE_OPTIONS[0],
                             "note": channel_note,
                             "in_use": channel_in_use
                         })
@@ -4088,10 +4206,14 @@ class YouTubeChannelManager:
                         existing_item["recovery_email"] = recovery_email
                     if recovery_password:
                         existing_item["recovery_password"] = recovery_password
+                    if recovery_2fa_key:
+                        existing_item["recovery_2fa_key"] = recovery_2fa_key
                     if recovery_phone:
                         existing_item["recovery_phone"] = recovery_phone
                     if email_note:
                         existing_item["email_note"] = email_note
+                    if used_services:
+                        existing_item["used_services"] = used_services
                     if key:
                         existing_item["2fa_key"] = key
                     if verified_by:
