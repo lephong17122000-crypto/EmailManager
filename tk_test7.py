@@ -762,6 +762,8 @@ class YouTubeChannelManager:
         # --- Xây dựng Giao diện Người dùng ---
         self.build_ui() # Tạo các widget và cấu hình style
         self.refresh_email_list() # Hiển thị danh sách email ban đầu
+        # Ensure the window is maximized after UI is fully built and shown
+        self.root.after(0, self._maximize_main_window)
 
         # --- Ràng buộc Sự kiện Toàn cục ---
         self.root.bind('<Control-n>', lambda e: self.add_email()) # Ctrl+N để thêm email mới
@@ -780,24 +782,13 @@ class YouTubeChannelManager:
 
 
     def center_main_window(self):
-        """Căn giữa hoặc mở toàn màn hình cửa sổ chính của ứng dụng."""
+        """Căn giữa cửa sổ chính của ứng dụng."""
         window = self.root
         # Kiểm tra xem cửa sổ có tồn tại không trước khi căn giữa
         if not window or not window.winfo_exists():
              return
 
         window.update_idletasks() # Đảm bảo cửa sổ được đo và kích thước được tính toán
-
-        # Ưu tiên mở toàn màn hình theo yêu cầu
-        try:
-            if os.name == 'nt':
-                window.state('zoomed')  # Windows: maximize cửa sổ
-            else:
-                window.attributes('-fullscreen', True)  # Linux/macOS: fullscreen
-            return
-        except Exception:
-            # Nếu không thể fullscreen, fallback về căn giữa
-            pass
 
         # Lấy kích thước hiện tại của cửa sổ (sau khi geometry("..."))
         width = window.winfo_width()
@@ -813,6 +804,25 @@ class YouTubeChannelManager:
 
         # Đặt vị trí cho cửa sổ
         window.geometry(f'+{x}+{y}')
+
+    def _maximize_main_window(self):
+        """Phóng to cửa sổ chính sau khi UI đã được render."""
+        window = self.root
+        if not window or not window.winfo_exists():
+            return
+
+        try:
+            if os.name == 'nt':
+                window.state('zoomed')  # Windows: maximize cửa sổ
+            else:
+                # Prefer maximize if supported, fallback to fullscreen
+                window.attributes('-zoomed', True)
+        except Exception:
+            try:
+                window.attributes('-fullscreen', True)
+            except Exception:
+                # If all else fails, keep current size
+                pass
 
     # --- Auto-Lock Methods ---
     def _record_activity(self, event=None):
