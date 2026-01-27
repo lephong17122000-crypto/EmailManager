@@ -731,6 +731,7 @@ class YouTubeChannelManager:
         self.selected_email_index = None # Chỉ mục của email đang được chọn trong self.data
         self.selected_channel_index = None # Chỉ mục của kênh đang được chọn trong danh sách kênh của email đã chọn
         self.otp_thread_id = None # Mã định danh cho luồng OTP hiện tại để quản lý vòng đời của nó
+        self.recovery_otp_thread_id = None # Mã định danh cho luồng OTP email khôi phục
         self.show_password = tk.BooleanVar(value=False) # Biến cho chức năng bật/tắt hiển thị mật khẩu
 
         # Biến chi tiết Email được kết nối với các widget giao diện
@@ -904,6 +905,14 @@ class YouTubeChannelManager:
              self.otp_canvas.itemconfig(self.otp_timer_text_item, text="")
         if hasattr(self, 'otp_arc'):
             self.otp_canvas.itemconfig(self.otp_arc, extent=0, outline='#bdc3c7')
+        # Dừng luồng OTP khôi phục và đặt lại hiển thị
+        self.recovery_otp_thread_id = None
+        if hasattr(self, 'recovery_otp_label'):
+             self.recovery_otp_label.config(text="------", foreground="gray")
+        if hasattr(self, 'recovery_otp_timer_text_item'):
+             self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text="")
+        if hasattr(self, 'recovery_otp_arc'):
+             self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=0, outline='#bdc3c7')
 
 
         # Ẩn cửa sổ chính hoặc chỉ vô hiệu hóa tất cả các widget
@@ -1382,6 +1391,7 @@ class YouTubeChannelManager:
         email_form_bottom_frame = ttk.Frame(email_pane)
         email_pane.add(email_form_bottom_frame)
         email_form_bottom_frame.grid_columnconfigure(0, weight=1) # Cho phép các khung con mở rộng theo chiều ngang
+        email_form_bottom_frame.grid_columnconfigure(1, weight=1)
 
         # Frame Trình tạo OTP
         otp_frame = ttk.LabelFrame(email_form_bottom_frame, text="Trình tạo OTP", padding="10")
@@ -1411,9 +1421,28 @@ class YouTubeChannelManager:
         self.copy_otp_button.pack(pady=(5, 0))
         ToolTip(self.copy_otp_button, "Sao chép mã OTP hiện tại vào clipboard")
 
+        # Frame hiển thị OTP cho email khôi phục (bên phải)
+        recovery_otp_frame = ttk.LabelFrame(email_form_bottom_frame, text="OTP Email khôi phục", padding="10")
+        recovery_otp_frame.grid(row=0, column=1, sticky=tk.NSEW, pady=(0, 10), padx=(10, 0))
+        recovery_otp_frame.grid_columnconfigure(1, weight=1)
+
+        self.recovery_otp_canvas = tk.Canvas(recovery_otp_frame, width=100, height=100, highlightthickness=0)
+        self.recovery_otp_canvas.grid(row=0, column=0, padx=(0, 10), sticky=tk.N)
+        self.recovery_otp_arc = self.recovery_otp_canvas.create_arc(10, 10, 90, 90, start=90, extent=360, outline='#3498db', width=5, style=tk.ARC)
+        self.recovery_otp_canvas.create_oval(15, 15, 85, 85, outline='#bdc3c7', width=2)
+        self.recovery_otp_timer_text_item = self.recovery_otp_canvas.create_text(50, 50, text="", font=('Arial', 16, 'bold'), fill='black', anchor=tk.CENTER)
+
+        recovery_otp_display_frame = ttk.Frame(recovery_otp_frame)
+        recovery_otp_display_frame.grid(row=0, column=1, sticky=tk.NSEW)
+        self.recovery_otp_label = ttk.Label(recovery_otp_display_frame, text="------", font=("Courier", 28, "bold"), foreground="gray")
+        self.recovery_otp_label.pack(pady=(0, 5))
+        self.copy_recovery_otp_button = ttk.Button(recovery_otp_display_frame, text="📋 Sao chép OTP", command=self.copy_recovery_otp)
+        self.copy_recovery_otp_button.pack(pady=(5, 0))
+        ToolTip(self.copy_recovery_otp_button, "Sao chép mã OTP của email khôi phục")
+
         # Frame Mã QR 2FA
         qr_frame = ttk.LabelFrame(email_form_bottom_frame, text="Mã QR 2FA", padding="10")
-        qr_frame.grid(row=1, column=0, sticky=tk.EW, pady=(0, 10))
+        qr_frame.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(0, 10))
         qr_frame.grid_columnconfigure(1, weight=1) # Cho phép nhãn ảnh mở rộng
 
         # Frame Nút QR Code
@@ -1435,7 +1464,7 @@ class YouTubeChannelManager:
 
         # Frame Ghi chú Email (trường mới)
         email_note_frame = ttk.LabelFrame(email_form_bottom_frame, text="Ghi chú Email", padding="10")
-        email_note_frame.grid(row=2, column=0, sticky=tk.NSEW, pady=(0, 5)) # Mở rộng theo cả 4 hướng
+        email_note_frame.grid(row=2, column=0, columnspan=2, sticky=tk.NSEW, pady=(0, 5)) # Mở rộng theo cả 4 hướng
         email_note_frame.grid_rowconfigure(0, weight=1) # Vùng văn bản mở rộng
         email_note_frame.grid_columnconfigure(0, weight=1) # Vùng văn bản mở rộng
 
@@ -1449,7 +1478,7 @@ class YouTubeChannelManager:
 
         # Frame dịch vụ đã sử dụng
         services_frame = ttk.LabelFrame(email_form_bottom_frame, text="Dịch vụ đã dùng", padding="10")
-        services_frame.grid(row=3, column=0, sticky=tk.EW, pady=(0, 5))
+        services_frame.grid(row=3, column=0, columnspan=2, sticky=tk.EW, pady=(0, 5))
         services_frame.columnconfigure(0, weight=1)
 
         services_grid = ttk.Frame(services_frame)
@@ -2461,6 +2490,7 @@ class YouTubeChannelManager:
 
         # Bắt đầu trình tạo OTP nếu có khóa 2FA
         self.start_otp(email_data.get("2fa_key", ""))
+        self.start_recovery_otp(email_data.get("recovery_2fa_key", ""))
 
         # Chuyển sang tab Chi tiết Email
         self.notebook.select(0)
@@ -2521,6 +2551,15 @@ class YouTubeChannelManager:
          # Đặt lại vòng cung canvas OTP
          if hasattr(self, 'otp_arc'):
              self.otp_canvas.itemconfig(self.otp_arc, extent=0, outline='#bdc3c7')
+
+         # Dừng tạo OTP khôi phục và đặt lại hiển thị
+         self.recovery_otp_thread_id = None
+         if hasattr(self, 'recovery_otp_label'):
+             self.recovery_otp_label.config(text="------", foreground="gray")
+         if hasattr(self, 'recovery_otp_timer_text_item'):
+             self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text="")
+         if hasattr(self, 'recovery_otp_arc'):
+             self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=0, outline='#bdc3c7')
 
          # Xóa xem trước và biến mã QR
          self.clear_qrcode_image_variable()
@@ -2864,6 +2903,81 @@ class YouTubeChannelManager:
                 # Exit loop immediately if root window is destroyed or locked
                 break
 
+
+    def start_recovery_otp(self, key):
+        """Bắt đầu luồng trình tạo OTP cho email khôi phục nếu khóa hợp lệ."""
+        self.recovery_otp_thread_id = time.time()
+
+        key = key.strip().replace(" ", "").upper()
+
+        if not key:
+            self.recovery_otp_thread_id = None
+            if hasattr(self, 'recovery_otp_label'):
+                self.recovery_otp_label.config(text="------", foreground="gray")
+            if hasattr(self, 'recovery_otp_timer_text_item'):
+                self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text="")
+            if hasattr(self, 'recovery_otp_arc'):
+                self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=0, outline='#bdc3c7')
+            return
+
+        if not self.validate_2fa_key(key):
+            self.recovery_otp_thread_id = None
+            if hasattr(self, 'recovery_otp_label'):
+                self.recovery_otp_label.config(text="Khóa không hợp lệ", foreground="#e74c3c")
+            if hasattr(self, 'recovery_otp_timer_text_item'):
+                self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text="")
+            if hasattr(self, 'recovery_otp_arc'):
+                self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=0, outline='#bdc3c7')
+            self.status_var.set("Lỗi: Định dạng Khóa 2FA khôi phục không hợp lệ.")
+            self.recovery_2fa_entry.config(style='Error.TEntry')
+            return
+
+        self.recovery_2fa_entry.config(style='TEntry')
+        if not self._is_locked:
+            threading.Thread(
+                target=self.recovery_otp_loop,
+                args=(key, self.recovery_otp_thread_id),
+                daemon=True,
+            ).start()
+
+
+    def recovery_otp_loop(self, key, thread_id):
+        """Tạo và cập nhật hiển thị OTP khôi phục trong một vòng lặp."""
+        while self.recovery_otp_thread_id == thread_id and self.root and self.root.winfo_exists() and not self._is_locked:
+            try:
+                totp = pyotp.TOTP(key)
+                code = totp.now()
+                left = 30 - int(time.time()) % 30
+
+                if self.root.winfo_exists():
+                    self.root.after(0, lambda c=code: self.recovery_otp_label.config(text=c, foreground="#27ae60"))
+
+                    if hasattr(self, 'recovery_otp_timer_text_item') and hasattr(self, 'recovery_otp_arc'):
+                        self.root.after(0, lambda l=left: self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text=str(l)))
+
+                        extent = 360 * left / 30
+                        color = "#2ecc71" if left >= 20 else ("#f39c12" if left >= 10 else "#e74c3c")
+                        self.root.after(0, lambda e=extent: self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=e))
+                        self.root.after(0, lambda clr=color: self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, outline=clr))
+                        self.root.after(0, lambda clr=color: self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, fill=clr))
+
+            except Exception as e:
+                print(f"Lỗi luồng OTP khôi phục: {e}")
+                if self.root.winfo_exists():
+                    self.root.after(0, lambda: self.recovery_otp_label.config(text="Lỗi", foreground="#e74c3c"))
+                    if hasattr(self, 'recovery_otp_timer_text_item'):
+                        self.root.after(0, lambda: self.recovery_otp_canvas.itemconfig(self.recovery_otp_timer_text_item, text=""))
+                    if hasattr(self, 'recovery_otp_arc'):
+                        self.root.after(0, lambda: self.recovery_otp_canvas.itemconfig(self.recovery_otp_arc, extent=0, outline='#bdc3c7'))
+
+                    self.root.after(0, lambda err=e: self.status_var.set(f"Lỗi luồng OTP khôi phục: {err}"))
+                self.recovery_otp_thread_id = None
+                break
+
+            if self.root.winfo_exists() and not self._is_locked:
+                time.sleep(1)
+            else:
+                break
 
     # --- Phương thức Xác thực ---
     def validate_email(self, email):
@@ -3599,6 +3713,36 @@ class YouTubeChannelManager:
             messagebox.showerror("Lỗi", f"Không tạo hoặc sao chép được OTP: {e}", parent=self.root)
 
 
+    def copy_recovery_otp(self):
+        """Sao chép mã OTP của email khôi phục vào clipboard."""
+         # Kiểm tra xem ứng dụng có bị khóa không
+        if self._is_locked:
+            self.status_var.set("Ứng dụng đang bị khóa. Không thể sao chép OTP.")
+            return
+
+        key = self.recovery_2fa_entry.get().strip().replace(" ", "").upper()
+
+        if not key:
+            messagebox.showwarning("Thiếu", "Chưa nhập khóa 2FA khôi phục.", parent=self.root)
+            self.status_var.set("Không có khóa khôi phục để tạo OTP")
+            return
+
+        if not self.validate_2fa_key(key):
+            messagebox.showwarning("Không hợp lệ", "Định dạng khóa 2FA khôi phục không hợp lệ.", parent=self.root)
+            self.status_var.set("Khóa khôi phục không hợp lệ")
+            self.recovery_2fa_entry.config(style='Error.TEntry')
+            return
+
+        self.recovery_2fa_entry.config(style='TEntry')
+
+        try:
+            otp_code = pyotp.TOTP(key).now()
+            pyperclip.copy(otp_code)
+            self.status_var.set("Đã sao chép OTP khôi phục vào clipboard")
+        except Exception as e:
+            self.status_var.set("Lỗi OTP khôi phục")
+            messagebox.showerror("Lỗi", f"Không tạo hoặc sao chép được OTP khôi phục: {e}", parent=self.root)
+
     def copy_channel_url(self):
         """Sao chép URL của kênh được chọn trong treeview kênh vào clipboard."""
          # Kiểm tra xem ứng dụng có bị khóa không
@@ -3615,9 +3759,9 @@ class YouTubeChannelManager:
         # Lấy các giá trị của mục được chọn
         item_values = self.channel_tree.item(selected_items[0], 'values')
 
-        # URL expected to be the 3rd value (index 2)
-        if item_values and len(item_values) > 2 and item_values[2]:
-             url = item_values[2]
+        # URL expected to be the 4th value (index 3)
+        if item_values and len(item_values) > 3 and item_values[3]:
+             url = item_values[3]
              pyperclip.copy(url)
              self.status_var.set(f"Đã sao chép URL: {url}")
         else:
