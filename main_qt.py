@@ -1,7 +1,7 @@
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QBrush, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -226,23 +226,24 @@ class MainWindow(QMainWindow):
         pixmap.fill(Qt.transparent)
 
         painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        try:
+            painter.setRenderHint(QPainter.Antialiasing, True)
 
-        cloud_color = QColor("#dbeafe")
-        envelope_color = QColor("#f97316")
-        outline = QColor("#111827")
+            cloud_color = QColor("#dbeafe")
+            envelope_color = QColor("#f97316")
+            outline = QColor("#111827")
 
-        painter.setPen(QPen(outline, 4))
-        painter.setBrush(QBrush(cloud_color))
-        painter.drawEllipse(20, 18, 88, 54)
+            painter.setPen(QPen(outline, 4))
+            painter.setBrush(QBrush(cloud_color))
+            painter.drawEllipse(20, 18, 88, 54)
 
-        painter.setBrush(QBrush(envelope_color))
-        painter.drawRoundedRect(24, 58, 80, 48, 8, 8)
-        painter.setPen(QPen(outline, 3))
-        painter.drawLine(24, 64, 64, 90)
-        painter.drawLine(104, 64, 64, 90)
-
-        painter.end()
+            painter.setBrush(QBrush(envelope_color))
+            painter.drawRoundedRect(24, 58, 80, 48, 8, 8)
+            painter.setPen(QPen(outline, 3))
+            painter.drawLine(24, 64, 64, 90)
+            painter.drawLine(104, 64, 64, 90)
+        finally:
+            painter.end()
         return QIcon(pixmap)
 
     def _build_channel_tab(self) -> QWidget:
