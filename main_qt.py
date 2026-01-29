@@ -1,0 +1,205 @@
+import sys
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMainWindow,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+SERVICE_OPTIONS = ["ChatGPT", "Gemini", "TikTok", "CapCut", "Facebook", "Edu"]
+CHANNEL_TYPE_OPTIONS = ["YouTube", "TikTok", "Reel"]
+
+
+class MainWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("Quản lý Kênh YouTube - PySide6")
+        self.resize(1200, 800)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(self._build_left_panel())
+        splitter.addWidget(self._build_right_panel())
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 3)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.addWidget(splitter)
+        self.setCentralWidget(container)
+
+    def _build_left_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+
+        layout.addWidget(QLabel("Danh sách Email"))
+        self.email_list = QListWidget()
+        self.email_list.addItems(["demo1@gmail.com", "demo2@gmail.com"])
+        layout.addWidget(self.email_list, stretch=1)
+
+        add_btn = QPushButton("➕ Thêm Email")
+        delete_btn = QPushButton("🗑 Xóa Email")
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(add_btn)
+        btn_row.addWidget(delete_btn)
+        layout.addLayout(btn_row)
+
+        return panel
+
+    def _build_right_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+
+        tabs = QTabWidget()
+        tabs.addTab(self._build_email_tab(), "Chi tiết Email")
+        tabs.addTab(self._build_channel_tab(), "Quản lý Kênh")
+        layout.addWidget(tabs)
+
+        return panel
+
+    def _build_email_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        form_group = QGroupBox("Thông tin Email")
+        form_layout = QFormLayout(form_group)
+        self.email_input = QLineEdit()
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.recovery_email_input = QLineEdit()
+        self.recovery_password_input = QLineEdit()
+        self.recovery_password_input.setEchoMode(QLineEdit.Password)
+        self.recovery_phone_input = QLineEdit()
+        self.recovery_2fa_input = QLineEdit()
+        self.primary_2fa_input = QLineEdit()
+        self.verified_by_input = QLineEdit()
+        self.login_location_input = QLineEdit()
+
+        form_layout.addRow("Email:", self.email_input)
+        form_layout.addRow("Mật khẩu:", self.password_input)
+        form_layout.addRow("Email khôi phục:", self.recovery_email_input)
+        form_layout.addRow("Mật khẩu khôi phục:", self.recovery_password_input)
+        form_layout.addRow("SĐT khôi phục:", self.recovery_phone_input)
+        form_layout.addRow("2FA khôi phục:", self.recovery_2fa_input)
+        form_layout.addRow("Khóa 2FA:", self.primary_2fa_input)
+        form_layout.addRow("Người xác minh:", self.verified_by_input)
+        form_layout.addRow("Đăng nhập ở:", self.login_location_input)
+        layout.addWidget(form_group)
+
+        otp_row = QHBoxLayout()
+        otp_row.addWidget(self._build_otp_panel("OTP chính"))
+        otp_row.addWidget(self._build_otp_panel("OTP Email khôi phục", compact=True))
+        layout.addLayout(otp_row)
+
+        qr_group = QGroupBox("Mã QR 2FA")
+        qr_layout = QHBoxLayout(qr_group)
+        qr_layout.addWidget(QPushButton("🖼️ Tải ảnh"))
+        qr_layout.addWidget(QPushButton("🔍 Quét ảnh"))
+        qr_layout.addWidget(QPushButton("❌ Xóa ảnh"))
+        qr_layout.addStretch(1)
+        layout.addWidget(qr_group)
+
+        note_group = QGroupBox("Ghi chú Email")
+        note_layout = QVBoxLayout(note_group)
+        self.note_input = QTextEdit()
+        note_layout.addWidget(self.note_input)
+        layout.addWidget(note_group)
+
+        services_group = QGroupBox("Dịch vụ đã dùng")
+        services_layout = QHBoxLayout(services_group)
+        for service in SERVICE_OPTIONS:
+            services_layout.addWidget(QCheckBox(service))
+        services_layout.addStretch(1)
+        layout.addWidget(services_group)
+
+        save_row = QHBoxLayout()
+        save_row.addStretch(1)
+        save_row.addWidget(QPushButton("💾 Lưu Email"))
+        layout.addLayout(save_row)
+
+        return tab
+
+    def _build_otp_panel(self, title: str, compact: bool = False) -> QWidget:
+        group = QGroupBox(title)
+        layout = QHBoxLayout(group)
+
+        timer = QLabel("00")
+        timer.setAlignment(Qt.AlignCenter)
+        timer.setFixedSize(64 if compact else 80, 64 if compact else 80)
+        timer.setFrameStyle(QFrame.Box | QFrame.Plain)
+
+        code_label = QLabel("------")
+        font = QFont("Courier", 20 if compact else 28, QFont.Bold)
+        code_label.setFont(font)
+
+        copy_btn = QPushButton("📋 Sao chép OTP")
+
+        layout.addWidget(timer)
+        layout.addWidget(code_label)
+        layout.addStretch(1)
+        layout.addWidget(copy_btn)
+        return group
+
+    def _build_channel_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        form_group = QGroupBox("Thông tin Kênh")
+        form_layout = QFormLayout(form_group)
+        self.channel_url_input = QLineEdit()
+        self.channel_name_input = QLineEdit()
+        self.channel_type_combo = QComboBox()
+        self.channel_type_combo.addItems(CHANNEL_TYPE_OPTIONS)
+        self.channel_note_input = QLineEdit()
+        self.channel_in_use = QCheckBox("Đang sử dụng")
+
+        form_layout.addRow("URL Kênh:", self.channel_url_input)
+        form_layout.addRow("Tên Kênh:", self.channel_name_input)
+        form_layout.addRow("Loại kênh:", self.channel_type_combo)
+        form_layout.addRow("Ghi chú:", self.channel_note_input)
+        form_layout.addRow("", self.channel_in_use)
+        layout.addWidget(form_group)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(QPushButton("🌐 Lấy tên"))
+        btn_row.addWidget(QPushButton("💾 Lưu Kênh"))
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        channels_group = QGroupBox("Danh sách Kênh")
+        channels_layout = QVBoxLayout(channels_group)
+        self.channel_list = QListWidget()
+        self.channel_list.addItems(
+            ["YouTube | Kênh Demo", "TikTok | Kênh Demo 2", "Reel | Kênh Demo 3"]
+        )
+        channels_layout.addWidget(self.channel_list)
+        layout.addWidget(channels_group, stretch=1)
+
+        return tab
+
+
+def main() -> None:
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
