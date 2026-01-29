@@ -1,7 +1,7 @@
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Quản lý Kênh YouTube - PySide6")
         self.resize(1200, 800)
         self.setFont(QFont("Segoe UI", 10))
+        self.setWindowIcon(self._build_app_icon())
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self._build_left_panel())
@@ -61,6 +62,28 @@ class MainWindow(QMainWindow):
         self.email_list = QListWidget()
         self.email_list.addItems(["demo1@gmail.com", "demo2@gmail.com"])
         layout.addWidget(self.email_list, stretch=1)
+
+        filter_group = QGroupBox("Bộ lọc tìm kiếm")
+        filter_layout = QVBoxLayout(filter_group)
+        status_row = QHBoxLayout()
+        self.filter_verified = QCheckBox("Đã xác minh")
+        self.filter_not_verified = QCheckBox("Chưa xác minh")
+        self.filter_in_use_channel = QCheckBox("Đang dùng kênh")
+        status_row.addWidget(self.filter_verified)
+        status_row.addWidget(self.filter_not_verified)
+        status_row.addWidget(self.filter_in_use_channel)
+        status_row.addStretch(1)
+        filter_layout.addLayout(status_row)
+
+        services_row = QHBoxLayout()
+        self.filter_service_boxes = []
+        for service in SERVICE_OPTIONS:
+            cb = QCheckBox(service)
+            self.filter_service_boxes.append(cb)
+            services_row.addWidget(cb)
+        services_row.addStretch(1)
+        filter_layout.addLayout(services_row)
+        layout.addWidget(filter_group)
 
         import_export_row = QHBoxLayout()
         self.import_button = QPushButton("📥 Nhập Excel")
@@ -173,25 +196,54 @@ class MainWindow(QMainWindow):
         group = QGroupBox(title)
         layout = QHBoxLayout(group)
 
-        timer = QLabel("00")
+        timer = QLabel("30")
         timer.setAlignment(Qt.AlignCenter)
-        timer.setFixedSize(80, 80)
-        timer.setFrameStyle(QFrame.Box | QFrame.Plain)
+        timer.setFixedSize(72, 72)
+        timer.setStyleSheet(
+            "QLabel {background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; font: 16pt 'Segoe UI';}"
+        )
 
-        code_label = QLabel("------")
-        font = QFont("Courier", 28, QFont.Bold)
-        code_label.setFont(font)
+        code_box = QLabel("------")
+        code_box.setAlignment(Qt.AlignCenter)
+        code_box.setMinimumWidth(160)
+        code_box.setStyleSheet(
+            "QLabel {background: #111827; color: #f9fafb; border-radius: 8px; padding: 8px; font: 28pt 'Consolas';}"
+        )
 
         copy_btn = QPushButton("📋 Sao chép OTP")
 
         layout.addWidget(timer)
-        layout.addWidget(code_label)
-        layout.addStretch(1)
+        layout.addWidget(code_box, stretch=1)
         layout.addWidget(copy_btn)
         return group
 
     def _toggle_password_visibility(self, checked: bool) -> None:
         self.password_input.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
+
+    def _build_app_icon(self) -> QIcon:
+        icon_size = 128
+        pixmap = QPixmap(icon_size, icon_size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        cloud_color = QColor("#dbeafe")
+        envelope_color = QColor("#f97316")
+        outline = QColor("#111827")
+
+        painter.setPen(QPen(outline, 4))
+        painter.setBrush(QBrush(cloud_color))
+        painter.drawEllipse(20, 18, 88, 54)
+
+        painter.setBrush(QBrush(envelope_color))
+        painter.drawRoundedRect(24, 58, 80, 48, 8, 8)
+        painter.setPen(QPen(outline, 3))
+        painter.drawLine(24, 64, 64, 90)
+        painter.drawLine(104, 64, 64, 90)
+
+        painter.end()
+        return QIcon(pixmap)
 
     def _build_channel_tab(self) -> QWidget:
         tab = QWidget()
