@@ -50,9 +50,24 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
 
         layout.addWidget(QLabel("Danh sách Email"))
+        search_row = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("🔍 Tìm kiếm Email...")
+        self.search_button = QPushButton("Tìm")
+        search_row.addWidget(self.search_input, stretch=1)
+        search_row.addWidget(self.search_button)
+        layout.addLayout(search_row)
+
         self.email_list = QListWidget()
         self.email_list.addItems(["demo1@gmail.com", "demo2@gmail.com"])
         layout.addWidget(self.email_list, stretch=1)
+
+        import_export_row = QHBoxLayout()
+        self.import_button = QPushButton("📥 Nhập Excel")
+        self.export_button = QPushButton("📤 Xuất Excel")
+        import_export_row.addWidget(self.import_button)
+        import_export_row.addWidget(self.export_button)
+        layout.addLayout(import_export_row)
 
         add_btn = QPushButton("➕ Thêm Email")
         delete_btn = QPushButton("🗑 Xóa Email")
@@ -85,15 +100,24 @@ class MainWindow(QMainWindow):
         self.email_input = QLineEdit()
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
+        self.show_password = QCheckBox("Hiện mật khẩu")
+        self.show_password.toggled.connect(self._toggle_password_visibility)
         self.primary_2fa_input = QLineEdit()
         self.verified_by_input = QLineEdit()
         self.login_location_input = QLineEdit()
+        self.is_verified_checkbox = QCheckBox("Đã xác minh")
+        self.verification_failed_checkbox = QCheckBox("Xác minh bị lỗi / từ chối")
 
         primary_layout.addRow("Email:", self.email_input)
-        primary_layout.addRow("Mật khẩu:", self.password_input)
+        password_row = QHBoxLayout()
+        password_row.addWidget(self.password_input)
+        password_row.addWidget(self.show_password)
+        primary_layout.addRow("Mật khẩu:", password_row)
         primary_layout.addRow("Khóa 2FA:", self.primary_2fa_input)
         primary_layout.addRow("Người xác minh:", self.verified_by_input)
         primary_layout.addRow("Đăng nhập ở:", self.login_location_input)
+        primary_layout.addRow("Trạng thái:", self.is_verified_checkbox)
+        primary_layout.addRow("", self.verification_failed_checkbox)
 
         recovery_group = QGroupBox("Email khôi phục")
         recovery_layout = QFormLayout(recovery_group)
@@ -114,7 +138,7 @@ class MainWindow(QMainWindow):
 
         otp_row = QHBoxLayout()
         otp_row.addWidget(self._build_otp_panel("OTP chính"))
-        otp_row.addWidget(self._build_otp_panel("OTP Email khôi phục", compact=True))
+        otp_row.addWidget(self._build_otp_panel("OTP Email khôi phục"))
         layout.addLayout(otp_row)
 
         qr_group = QGroupBox("Mã QR 2FA")
@@ -145,17 +169,17 @@ class MainWindow(QMainWindow):
 
         return tab
 
-    def _build_otp_panel(self, title: str, compact: bool = False) -> QWidget:
+    def _build_otp_panel(self, title: str) -> QWidget:
         group = QGroupBox(title)
         layout = QHBoxLayout(group)
 
         timer = QLabel("00")
         timer.setAlignment(Qt.AlignCenter)
-        timer.setFixedSize(64 if compact else 80, 64 if compact else 80)
+        timer.setFixedSize(80, 80)
         timer.setFrameStyle(QFrame.Box | QFrame.Plain)
 
         code_label = QLabel("------")
-        font = QFont("Courier", 20 if compact else 28, QFont.Bold)
+        font = QFont("Courier", 28, QFont.Bold)
         code_label.setFont(font)
 
         copy_btn = QPushButton("📋 Sao chép OTP")
@@ -165,6 +189,9 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         layout.addWidget(copy_btn)
         return group
+
+    def _toggle_password_visibility(self, checked: bool) -> None:
+        self.password_input.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
 
     def _build_channel_tab(self) -> QWidget:
         tab = QWidget()
